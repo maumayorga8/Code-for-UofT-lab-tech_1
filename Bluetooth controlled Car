@@ -1,0 +1,133 @@
+
+//To be compiled with XC8 version 1.xx only
+//Sample codes rev1.1
+
+#define _XTAL_FREQ 2000000
+#define MA_EN   RB3 //CCP2
+#define MA_INA  RB0 //CW
+#define MA_INB  RB1 //CCW
+
+#define MB_EN   RB5 //CCP3
+#define MB_INA  RB2 //CW
+#define MB_INB  RB4 //CCW
+
+#define GRIPPER RD0
+#define LED_FRONT_R RD7 //pin 30
+#define LED_FRONT_L RD6 //pin 29
+#define LED_BACK_R RD5  //pin 28
+#define LED_BACK_L RD4  //pin 27
+
+#define TRIG RD1
+#define ECHO RD2
+
+#define STEERING RC2 //define RC2 (CCP1) as PWM for steering mechanism
+
+#pragma config FOSC = INTOSCIO  //Select intenal oscillator
+#pragma config WDTE = OFF       //Watchdog timer off
+#pragma config CCP2MX = RB3     //PWM channel #2 output on RB3
+
+
+#include <xc.h>
+#include <stdio.h>
+#include <string.h>
+#include "UART_RING_BUF.h"      //UART communication library
+#include "CAR.h"
+#include "ultrasonic_sensor.h"
+#include "led_functions.h"
+
+unsigned char s[10];
+int distance;
+int ULTRASENSOR();
+
+void main(void)
+{
+  OSCCON    =0x52;  //Set oscillator to 2Mhz
+  TRISB     =0;     //PORTB is output  
+  TRISD     =0b00001100;  //PORTD is input except RD0 is output
+  ADCON1    =0x87;  //Absolutely need it if using PORTB as digital I/O
+  TRISA6    =0;     //Output to on board LED
+  CCP1CON   =0x0C;  //PWM module 1
+  CCP2CON   =0x0C;  //PWM module 2
+  CCP3CON   =0x0C;  //PWM module 3
+  T2CON     =0x06;  //Prescale value 16
+  PR2       =155;   //PWM Frequency 200Hz
+  CCPR2L    =125;   //PWM duty cycle
+  CCPR3L    =125;   //PWM duty cycle
+  PORTB     =0;
+  TRISC6	=0;     //RC6 is output for UART TX
+  TRISC7	=1;     //RC7 is input for UART RX
+  TRISC2	=0;     //RC2 PWM
+  
+//  TRISD2 = 1;       // ECHO as input
+  T1CON=0x10;     //timer set to 1 MHz
+  __delay_ms(500);
+
+  
+  UART_INIT(9600);  //Initialize UART module with baud rate 9600
+  __delay_ms(500);
+  
+  UART_WRITE_LINE("Connected");
+ 
+  
+  while(1)
+  {
+    if(RING_BUFFER_DATA_NUM()!=0) 
+    {
+      
+	  __delay_ms(10);	//wait for all 10 characters
+      RING_BUFFER_DATA_EXT(s,10);
+
+      if ((strncmp(s,"for",3)==0))
+      {
+        if(GET_DISTANCE()>600)        
+        {
+            MA_CW(); MB_CW();led_forward();
+        }
+        else
+        {
+            MA_STOP();MB_STOP();
+        }
+      }
+      //if ((strncmp(s,"for",3)==0)){MA_CW(); MB_CW();led_forward();}
+      else if ((strncmp(s,"rev",3)==0)) {MA_CCW();MB_CCW();led_backward();}
+      else if ((strncmp(s,"stp",3)==0)) {MA_STOP();MB_STOP();CCPR1L=PR2*0.3;CCPR1L=PR2*0.3;led_off();}
+      
+      else if ((strncmp(s,"low",3)==0)) {CCPR2L=PR2*0.3;CCPR3L=PR2*0.3;}
+      else if ((strncmp(s,"mid",3)==0)) {CCPR2L=PR2*0.6;CCPR3L=PR2*0.6;}
+      else if ((strncmp(s,"hig",3)==0)) {CCPR2L=PR2;CCPR3L=PR2;}
+      
+      else if ((strncmp(s,"lef",3)==0)) {CCPR1L=PR2*0.382;}
+      else if ((strncmp(s,"rig",3)==0)) {CCPR1L=PR2*0.255;}
+      
+      else if ((strncmp(s,"fle",3)==0)) {CCPR1L=PR2*0.382;MA_CW(); MB_CW();}
+      else if ((strncmp(s,"fri",3)==0)) {CCPR1L=PR2*0.255;MA_CW(); MB_CW();}
+      
+      else if ((strncmp(s,"rle",3)==0)) {CCPR1L=PR2*0.382;MA_CCW();MB_CCW();}
+      else if ((strncmp(s,"rri",3)==0)) {CCPR1L=PR2*0.255;MA_CCW();MB_CCW();}
+      
+      else if ((strncmp(s,"clo",3)==0)) 
+      {
+          for(int i=0;i<10;i++)
+          {
+              GRIPPER = 1;
+              __delay_us(1400);
+              GRIPPER = 0;
+              __delay_ms(5);
+          }
+      }
+      else if ((strncmp(s,"opn",3)==0))
+      {
+          for(int i=0;i<100;i++)
+          {
+              GRIPPER = 1;
+              __delay_us(1800);
+              GRIPPER = 0;
+              __delay_ms(5);
+          }
+      }
+      
+      BUFFER_DUMP(s);
+      
+    }
+  }
+}
