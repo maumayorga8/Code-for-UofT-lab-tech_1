@@ -1,0 +1,318 @@
+MODULE Sort_Pallet
+    !******************************
+    !
+    !Description: 
+    !   Module:  Cell 4_Pallet Sorting Station
+    !   Industrial Robotics
+    !
+    ! Authors: 301174379 - Ye Seul Song
+    !          301323552 - Mauricio Mayorga
+    !
+    !   Cell Operation Steps
+    !   1. Reset all DOs
+    !   2. Home Robot
+    !   3. Home PPNP
+    !   4. Raise block cylinder to block pallet coming in
+    !   5. Wait for pallet arrival to block
+    !   6. Stop conveyor
+    !   7. Raise lift cylinder to lift up pallet
+    !   8. Lower block cylinder
+    !   9. Check and sort pallet
+    !   10. Lower lift cylineder
+    !   11. Start conveyor
+    !   12. Home Robot
+    !
+    !******************************
+    PERS tooldata Gripper_Tool:=[TRUE,[[53.1812,-4.99979,237.624],[1,0,0,0]],[2,[0,0,100],[1,0,0,0],0,0,0]];
+    PERS tooldata Vacuum_Tool:=[TRUE,[[-135.271,-1.40605,241.897],[1,0,0,0]],[2,[0,0,100],[1,0,0,0],0,0,0]];
+    
+    CONST robtarget Home:=[[1052.20,81.04,1301.97],[0.688737,-0.0226273,0.721123,-0.0714911],[0,-1,0,0],[9E+09,9E+09,9E+09,9E+09,9E+09,9E+09]];
+    CONST robtarget check_pt:=[[1427.32,-127.47,1095.92],[0.656333,0.00243457,0.748922,-0.0913064],[-1,-1,0,0],[9E+09,9E+09,9E+09,9E+09,9E+09,9E+09]];
+    CONST robtarget clear_pt:=[[-21.95,-693.61,1195.61],[0.460423,0.47111,0.547722,-0.515817],[-2,0,-1,0],[9E+09,9E+09,9E+09,9E+09,9E+09,9E+09]];
+    CONST robtarget pick_prt:=[[-142.26,-1110.36,1026.71],[0.456864,0.471055,0.541728,-0.525274],[-2,1,-2,0],[9E+09,9E+09,9E+09,9E+09,9E+09,9E+09]];
+    CONST robtarget drop_prt:=[[1373.72,41.16,1012.25],[0.688726,-0.0226245,0.721133,-0.071495],[0,-2,0,0],[9E+09,9E+09,9E+09,9E+09,9E+09,9E+09]];
+    CONST robtarget drop_prt_1:=[[1411.78,-423.62,1005.99],[0.688712,-0.0226059,0.721148,-0.071484],[-1,0,-1,0],[9E+09,9E+09,9E+09,9E+09,9E+09,9E+09]];
+    CONST robtarget drop_prt_2:=[[1373.72,41.16,1012.25],[0.688726,-0.0226245,0.721133,-0.071495],[0,-2,0,0],[9E+09,9E+09,9E+09,9E+09,9E+09,9E+09]];
+    CONST robtarget drop_prt_3:=[[1373.72,41.16,1012.25],[0.688726,-0.0226245,0.721133,-0.071495],[0,-2,0,0],[9E+09,9E+09,9E+09,9E+09,9E+09,9E+09]];
+    CONST robtarget Vacuum:=[[924.27,-122.64,1219.87],[0.0757692,0.72097,0.0271077,0.688278],[-1,0,-3,0],[9E+09,9E+09,9E+09,9E+09,9E+09,9E+09]];
+    CONST robtarget Gripper:=[[923.83,-116.24,1301.97],[0.688738,-0.0226206,0.721123,-0.0714855],[-1,0,-1,0],[9E+09,9E+09,9E+09,9E+09,9E+09,9E+09]];
+    CONST robtarget pick_pallet:=[[283.59,-528.22,1313.38],[0.617931,0.361831,0.600406,-0.356022],[-1,0,-1,0],[9E+09,9E+09,9E+09,9E+09,9E+09,9E+09]];
+    CONST robtarget drop_goodp:=[[283.59,-528.22,1313.38],[0.617931,0.361831,0.600406,-0.356022],[-1,0,-1,0],[9E+09,9E+09,9E+09,9E+09,9E+09,9E+09]];
+    CONST robtarget drop_badp:=[[283.59,-528.22,1313.38],[0.617931,0.361831,0.600406,-0.356022],[-1,0,-1,0],[9E+09,9E+09,9E+09,9E+09,9E+09,9E+09]];
+    CONST robtarget dump_pt1:=[[283.59,-528.22,1313.38],[0.617931,0.361831,0.600406,-0.356022],[-1,0,-1,0],[9E+09,9E+09,9E+09,9E+09,9E+09,9E+09]];
+    CONST robtarget dump_pt2:=[[283.59,-528.22,1313.38],[0.617931,0.361831,0.600406,-0.356022],[-1,0,-1,0],[9E+09,9E+09,9E+09,9E+09,9E+09,9E+09]];
+
+
+    
+    VAR num Goodvar;
+    VAR num Badvar;
+    VAR num gres;
+    VAR num Type;
+    VAR num Z;
+    
+    PROC Main()
+        Goodvar:=0;
+        Reset_IO;
+        PPNP_Home;
+        Robot_Home;
+        Sort;
+        MSG;
+    ENDPROC
+    
+     PROC Dummy()
+        MoveJ Home, v2000, z50, Gripper_Tool;
+        MoveJ check_pt, v2000, z50, Gripper_Tool;
+        MoveJ clear_pt, v2000, z50, Gripper_Tool;
+        MoveJ pick_prt, v80, fine, Gripper_Tool;
+        MoveJ drop_prt, V500, fine, Gripper_Tool;
+        MoveJ Vacuum, V80, fine, Vacuum_Tool;
+        MoveJ Gripper, v300, z20, Gripper_Tool;
+        MoveJ pick_pallet, v100, z20, Vacuum_Tool;
+        MoveJ drop_goodp, v2000, z50, Vacuum_Tool;
+        MoveJ drop_badp, v2000, z50, Vacuum_Tool;
+        MoveJ dump_pt1, v80, fine, Vacuum_Tool;
+        MoveJ dump_pt2, v80, fine, Vacuum_Tool;
+    ENDPROC
+    
+    PROC Reset_IO() !Check I/O table
+        Reset DO1;
+        Reset DO2;
+        Reset DO3;
+        Reset DO4;
+        Reset DO5;
+        Reset DO6;
+        Reset DO7;
+        Reset DO8;
+        Reset DO9;
+        Reset DO10;
+        Reset DO11;
+        Reset DO12;
+        Reset DO13;
+        Reset DO14;
+        Reset DO15;
+        Reset DO16;
+    ENDPROC
+    
+    PROC Robot_Home()
+        MoveJ Home, v2000, z50, Gripper_Tool;
+    ENDPROC
+    
+    PROC PPNP_Home()
+        !A_ext;
+        Set DO5;
+        Reset DO6;
+        WaitTime 0.5;
+        !B_ret;
+        Set DO8;
+        Reset DO7;
+        WaitTime 0.5;
+        !C_ret;
+        Set DO10;
+        Reset DO9;
+        WaitTime 0.5;
+        !D_ret;
+        Reset DO11;
+        WaitTime 0.5;
+        WaitDI di7, 1;
+    ENDPROC
+    
+    PROC Sort()
+        WHILE Goodvar<3 DO
+            Robot_Home;
+            Block_Raise;
+            waitDI di2, 1; !Pallet Detecting sensor
+            Stop_Conv;
+            Lift_Raise;
+            Block_Lower;
+            Check;
+            Lift_Lower;
+            Strt_Conv;
+        ENDWHILE
+    ENDPROC
+    
+    PROC Block_Raise() 
+        Set DO4;
+        WaitDI di11, 1;
+    ENDPROC
+    
+    PROC Block_Lower()
+        Reset DO4;
+        WaitDI di10, 1;
+    ENDPROC
+    
+    PROC Lift_Raise()
+        Set DO3;
+        WaitDI di4, 1;
+    ENDPROC
+    
+    PROC Lift_Lower()
+        Reset DO3;
+        WaitDI di3, 1;
+    ENDPROC
+    
+    PROC Strt_Conv()
+        Reset DO14;
+    ENDPROC
+    
+    PROC Stop_Conv()
+        Set DO14;
+    ENDPROC
+    
+    PROC Check()
+        MoveJ Offs(check_pt,0,0,50), V1000, z0, Gripper_Tool;
+        MoveL check_pt, v500, fine, Gripper_Tool; !Photoeye Sensor
+        WaitTime 1;
+        IF Di9=1 THEN
+            MoveJ Offs(check_pt,0,0,50), V1000, z0, Gripper_Tool;
+            Good_Pal;
+        ELSE
+            MoveJ Offs(check_pt,0,0,100), V1000, z0, Gripper_Tool;
+            Bad_Pal;
+        ENDIF
+    ENDPROC
+    
+    PROC Good_Pal()
+        Robot_Home;
+        Add_Spacer;
+        Robot_Home;
+        Pick_Pal;
+        Drop_Good_Pal;
+        Robot_Home;
+    ENDPROC
+    
+    PROC Add_Spacer()
+        IF Type=0 THEN
+            Drop_Type1;
+            Type:=1;
+        ELSEIF Type=1 THEN
+            Drop_Type2;
+            Type:=0;
+        ENDIF
+    ENDPROC
+    
+    PROC Drop_Type1()
+        Robot_Home;
+        Pick_Part;
+        MoveJ Offs(drop_prt, 0,0,50), v500, z0, Gripper_Tool;
+        MoveL drop_prt, v80, fine, Gripper_Tool;
+        Open_Gripper;
+        MoveJ Offs(drop_prt, 0,0,50), v100, z50, Gripper_Tool;
+        Robot_Home;
+        Pick_Part;
+        MoveJ Offs(drop_prt,0,0,50), v500, z0, Gripper_Tool;
+        MoveL drop_prt_1, v80, fine, Gripper_Tool;
+        Open_Gripper;
+        MoveJ Offs(drop_prt_1, 0,0,50), v100, z50, Gripper_Tool;
+        Robot_Home;
+    ENDPROC
+    
+    PROC Drop_Type2()
+        Robot_Home;
+        Pick_Part;
+        MoveJ Offs(drop_prt, 78, -8,50), v500, z0, Gripper_Tool;
+        MoveL Offs(drop_prt, 78, -8,0), v80, z0, Gripper_Tool;
+        Open_Gripper;
+        MoveJ Offs(drop_prt, 78,-8,50), v100, z50, Gripper_Tool;
+        Robot_Home;
+        Pick_Part;
+        MoveJ Offs(drop_prt_1,-78.5,4.5,50), v500, z0, Gripper_Tool;
+        MoveL Offs(drop_prt_1,-78.5,4.5,0), v80, fine, Gripper_Tool;
+        Open_Gripper;
+        MoveJ Offs(drop_prt_1,-78.5,4.5,50), v100, z50, Gripper_Tool;
+        Robot_Home;
+    ENDPROC
+    
+    PROC Pick_Part()
+        WaitDI DI12, 1;
+        Open_Gripper;
+        MoveJ clear_pt, v1000, z50, Gripper_Tool;
+        MoveJ Offs(pick_prt, 0, 100, 60), v1000, z50, Gripper_Tool;
+        MoveJ Offs(pick_prt, 0, 50, 0), v500, z0, Gripper_Tool;
+        MoveL pick_prt, v80, fine, Gripper_Tool;
+        Close_Gripper;
+        MoveJ Offs(pick_prt, 0, 0, 30), v500, z10, Gripper_Tool;
+        MoveJ Offs(pick_prt, 0, 100, 60), v1000, z50, Gripper_Tool;
+        MoveJ clear_pt, v1000, z50, Gripper_Tool;
+    ENDPROC
+    
+     PROC Open_Gripper()
+        Reset DO2;
+        WaitTime 0.5;
+    ENDPROC
+    
+    PROC Close_Gripper()
+        Set DO2;
+        WaitTime 0.5;
+    ENDPROC
+    
+    PROC Vacuun_Tool_Rot()
+        MoveJ Vacuum, v1000, z50, Vacuum_Tool;
+    ENDPROC
+    
+    PROC Gripper_Tool_Rot()
+        MoveJ Gripper, v1000, z50, Gripper_Tool;
+    ENDPROC
+    
+    PROC Pick_Pal()
+        Reset DO15; !vacuum off
+        Vacuun_Tool_Rot;
+        MoveJ Offs(pick_pallet,0,0,100), V1000, z0, Vacuum_Tool;
+        MoveL pick_pallet, v80, fine, Vacuum_Tool;
+        Set DO15; !vacuum on
+        WaitTime 0.5;
+        MoveJ Offs(pick_pallet,0,0,100), V500, z10, Vacuum_Tool;
+    ENDPROC
+    
+    PROC Drop_Good_Pal() 
+        MoveJ Offs(drop_goodp,0,0,Z*13+150), V300, z50, Vacuum_Tool; 
+        MoveL Offs(drop_goodp,0,0,Z*13+20), V150, z10, Vacuum_Tool;
+        MoveL Offs(drop_goodp,0,0,Z*13), V80, fine, Vacuum_Tool; !Block height is 13
+        Reset DO15; !vacuum off
+        WaitTime 0.5;
+        MoveL Offs(drop_goodp,0,0,Z*13+20), V150, z10, Vacuum_Tool;
+        MoveJ Offs(drop_goodp,0,0,Z*13+150), V300, z50, Vacuum_Tool;
+        Gripper_Tool_Rot;
+        Z:=Z+1;
+        Goodvar:=Goodvar+1;
+    ENDPROC
+    
+    PROC Bad_Pal()
+        Robot_Home;
+        Pick_Pal;
+        Drop_Bad_Pal;
+        Robot_Home;
+    ENDPROC
+    
+    PROC Drop_Bad_Pal()
+        Dump_Part;
+        MoveJ Offs(drop_badp,0,0,50), V500, z0, Vacuum_Tool;
+        MoveL drop_badp, V80, fine, Vacuum_Tool;
+        Reset DO15;!vacuum off
+        MoveJ Offs(drop_badp,0,0,100), V100, z50, Vacuum_Tool;
+        Gripper_Tool_Rot;
+        Badvar:=Badvar+1;
+    ENDPROC
+    
+    PROC Dump_Part()
+        MoveJ dump_pt1, v500, z20, Vacuum_Tool; !Top of drop position
+        MoveJ dump_pt2, v100, z0, Vacuum_Tool; !Bend to drop part
+        WaitTime 2;
+        MoveJ dump_pt1, v500, z20, Vacuum_Tool;
+    ENDPROC
+    
+    PROC MSG()
+        IF Goodvar=2 THEN
+            TPErase;
+            TPWrite "Good Pallet Stack FULL!";
+            TPWrite "Reset:";
+            TPReadFK gres,"","OK","","","","";
+            IF gres=1 THEN
+                Goodvar:=0;
+                Z:=0;
+                Type:=0;
+                Sort;
+            ENDIF
+        ENDIF
+    ENDPROC
+
+ENDMODULE
